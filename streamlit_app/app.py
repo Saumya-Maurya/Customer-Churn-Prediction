@@ -408,4 +408,4 @@ else:  # Churn Prediction page
 
     # Footer
     st.markdown("---")
-    st.markdown("Built with Streamlit • Data Science Project") 
+    st.markdown("Built with Streamlit •Saumya Maurya Project") 
