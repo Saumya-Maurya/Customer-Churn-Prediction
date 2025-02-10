@@ -136,8 +136,9 @@ elif page == "Services Analysis":
 elif page == "Financial Analysis":
     st.title("💰 Financial Analysis")
     
-    # Convert TotalCharges to numeric
+    # Convert TotalCharges to numeric and handle missing values
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+    df['TotalCharges'].fillna(df['MonthlyCharges'], inplace=True)
     
     # Monthly Charges Distribution
     fig = px.histogram(df, x='MonthlyCharges', 
@@ -161,13 +162,42 @@ elif page == "Financial Analysis":
                     barmode='group')
         st.plotly_chart(fig, use_container_width=True)
     
-    # Tenure vs Charges Analysis
-    fig = px.scatter(df, x='tenure', y='MonthlyCharges', 
-                    color='Churn', 
-                    size='TotalCharges',
-                    size_max=20,  # Add this to control the maximum marker size
-                    title='Tenure vs Monthly Charges')
+    # Tenure vs Charges Analysis with fixed size values
+    fig = px.scatter(df, 
+                    x='tenure', 
+                    y='MonthlyCharges',
+                    color='Churn',
+                    size=[20] * len(df),  # Fixed size instead of using TotalCharges
+                    title='Tenure vs Monthly Charges',
+                    labels={
+                        'tenure': 'Tenure (months)',
+                        'MonthlyCharges': 'Monthly Charges ($)'
+                    })
+    
+    # Update layout
+    fig.update_layout(
+        showlegend=True,
+        xaxis_title="Tenure (months)",
+        yaxis_title="Monthly Charges ($)"
+    )
+    
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Additional financial metrics
+    st.subheader("Financial Metrics Summary")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        avg_monthly = df['MonthlyCharges'].mean()
+        st.metric("Average Monthly Charges", f"${avg_monthly:.2f}")
+    
+    with col2:
+        avg_total = df['TotalCharges'].mean()
+        st.metric("Average Total Charges", f"${avg_total:.2f}")
+    
+    with col3:
+        revenue_risk = df[df['Churn'] == 'Yes']['MonthlyCharges'].sum()
+        st.metric("Monthly Revenue at Risk", f"${revenue_risk:.2f}")
 
 else:  # Churn Prediction page
     st.title("🔮 Churn Prediction")
@@ -306,10 +336,75 @@ else:  # Churn Prediction page
 
     # Add information about the model
     with st.expander("Model Information"):
+        st.subheader("Model Overview")
         st.write(f"Model Type: {type(model_data['model']).__name__}")
-        st.write("Model Metrics:")
-        metrics_df = pd.DataFrame([model_data['metrics']])
-        st.dataframe(metrics_df)
+        
+        try:
+            if 'metrics' in model_data:
+                st.subheader("Model Performance Metrics")
+                
+                # Create metrics columns
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Test Accuracy", 
+                             f"{model_data['metrics']['Test_Accuracy']:.2%}")
+                    st.metric("Training Accuracy", 
+                             f"{model_data['metrics']['Training_Accuracy']:.2%}")
+                
+                with col2:
+                    st.metric("Precision", 
+                             f"{model_data['metrics']['Precision']:.2%}")
+                    st.metric("Recall", 
+                             f"{model_data['metrics']['Recall']:.2%}")
+                
+                with col3:
+                    st.metric("F1 Score", 
+                             f"{model_data['metrics']['F1_Score']:.2%}")
+            
+            if 'feature_importance' in model_data:
+                st.subheader("Feature Importance")
+                importance_df = pd.DataFrame({
+                    'Feature': list(model_data['feature_importance'].keys()),
+                    'Importance': list(model_data['feature_importance'].values())
+                }).sort_values('Importance', ascending=True)
+                
+                fig = px.bar(importance_df,
+                            x='Importance',
+                            y='Feature',
+                            orientation='h',
+                            title='Feature Importance')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            if 'confusion_matrix' in model_data:
+                st.subheader("Confusion Matrix")
+                cm = np.array(model_data['confusion_matrix'])
+                
+                # Create confusion matrix heatmap
+                fig = go.Figure(data=go.Heatmap(
+                    z=cm,
+                    x=['No Churn', 'Churn'],
+                    y=['No Churn', 'Churn'],
+                    text=cm,
+                    texttemplate="%{text}",
+                    textfont={"size": 16},
+                    hoverongaps=False,
+                    colorscale='RdBu'
+                ))
+                
+                fig.update_layout(
+                    title='Confusion Matrix',
+                    xaxis_title='Predicted',
+                    yaxis_title='Actual',
+                    width=400,
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+        
+        except Exception as e:
+            st.error(f"Error displaying model information: {str(e)}")
+            st.write("Model data:", model_data.keys())
 
     # Footer
     st.markdown("---")
